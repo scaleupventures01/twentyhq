@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScaleUp CRM Architecture</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; padding: 32px; }
+  h1 { font-size: 28px; font-weight: 700; margin-bottom: 6px; color: #fff; }
+  .subtitle { color: #64748b; font-size: 14px; margin-bottom: 40px; }
+
+  /* ORG TREE */
+  .org-tree { display: flex; flex-direction: column; align-items: center; margin-bottom: 48px; }
+  .org-node-root { background: #6366f1; color: white; padding: 12px 28px; border-radius: 10px; font-weight: 700; font-size: 16px; }
+  .org-branches { display: flex; gap: 32px; margin-top: 0; position: relative; }
+  .org-branches::before { content: ''; position: absolute; top: -1px; left: 50%; transform: translateX(-50%); width: 2px; height: 24px; background: #334155; }
+  .org-line-container { display: flex; flex-direction: column; align-items: center; }
+  .org-line { width: 2px; height: 24px; background: #334155; }
+  .org-horizontal { display: flex; gap: 32px; position: relative; }
+  .org-horizontal::before { content: ''; position: absolute; top: 0; left: calc(50px); right: calc(50px); height: 2px; background: #334155; }
+  .org-product { display: flex; flex-direction: column; align-items: center; gap: 0; }
+  .org-node { padding: 10px 20px; border-radius: 8px; font-weight: 600; font-size: 14px; text-align: center; min-width: 120px; }
+  .node-offerpath { background: #0ea5e9; color: white; }
+  .node-prevyu { background: #8b5cf6; color: white; }
+  .node-scaleup { background: #10b981; color: white; }
+  .org-sub { display: flex; gap: 8px; margin-top: 12px; }
+  .badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge-b2b { background: #1e3a5f; color: #60a5fa; }
+  .badge-b2c { background: #2d1b69; color: #a78bfa; }
+
+  /* SECTION */
+  .section { margin-bottom: 40px; }
+  .section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin-bottom: 16px; }
+
+  /* OBJECT CARDS */
+  .objects-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .object-card { background: #1e2533; border: 1px solid #2d3748; border-radius: 12px; overflow: hidden; }
+  .object-header { padding: 14px 18px; display: flex; align-items: center; gap: 10px; }
+  .object-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .object-name { font-weight: 700; font-size: 15px; }
+  .object-desc { font-size: 12px; color: #64748b; }
+  .object-fields { padding: 0 18px 14px; }
+  .field-row { display: flex; align-items: center; gap-8px; padding: 5px 0; border-bottom: 1px solid #1a2030; font-size: 13px; gap: 8px; }
+  .field-row:last-child { border-bottom: none; }
+  .field-name { color: #cbd5e1; flex: 1; }
+  .field-type { font-size: 11px; padding: 2px 7px; border-radius: 4px; font-weight: 600; }
+  .type-text { background: #1e3a5f; color: #60a5fa; }
+  .type-select { background: #2d1b69; color: #a78bfa; }
+  .type-relation { background: #1a3a2a; color: #34d399; }
+  .type-number { background: #3a2a1a; color: #fb923c; }
+  .type-date { background: #3a1a2a; color: #f472b6; }
+  .type-bool { background: #2a3a1a; color: #a3e635; }
+  .field-star { color: #f59e0b; font-size: 10px; }
+
+  .bg-companies { background: linear-gradient(135deg, #0ea5e91a, #0ea5e905); }
+  .bg-people { background: linear-gradient(135deg, #8b5cf61a, #8b5cf605); }
+  .bg-opp { background: linear-gradient(135deg, #10b9811a, #10b98105); }
+  .bg-custom { background: linear-gradient(135deg, #f59e0b1a, #f59e0b05); }
+
+  /* PIPELINES */
+  .pipelines-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .pipeline-card { background: #1e2533; border: 1px solid #2d3748; border-radius: 12px; padding: 16px; }
+  .pipeline-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .pipeline-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .pipeline-name { font-weight: 700; font-size: 14px; }
+  .pipeline-motion { font-size: 11px; padding: 2px 8px; border-radius: 20px; margin-left: auto; }
+  .motion-b2c { background: #2d1b69; color: #a78bfa; }
+  .motion-b2b { background: #1e3a5f; color: #60a5fa; }
+  .motion-client { background: #1a3a2a; color: #34d399; }
+  .stages { display: flex; flex-direction: column; gap: 6px; }
+  .stage { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .stage-num { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: white; flex-shrink: 0; }
+  .stage-arrow { color: #334155; font-size: 10px; margin-left: auto; }
+
+  /* FILTER EXAMPLES */
+  .filter-examples { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+  .filter-card { background: #1e2533; border: 1px solid #2d3748; border-radius: 10px; padding: 14px 16px; }
+  .filter-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; color: #e2e8f0; }
+  .filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .chip-product { background: #1e3a5f; color: #60a5fa; }
+  .chip-type { background: #2d1b69; color: #a78bfa; }
+  .chip-stage { background: #1a3a2a; color: #34d399; }
+  .filter-result { font-size: 12px; color: #64748b; margin-top: 8px; }
+
+  .connector { text-align: center; color: #334155; font-size: 20px; margin: 4px 0; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+  .legend-item { display: flex; align-items: center; gap-6px; font-size: 12px; color: #94a3b8; gap: 6px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+</style>
+</head>
+<body>
+
+<h1>ScaleUp CRM Architecture</h1>
+<p class="subtitle">How data is structured in Twenty CRM across all products</p>
+
+<!-- ORG STRUCTURE -->
+<div class="section">
+  <div class="section-title">Company Structure</div>
+  <div style="background:#1e2533;border:1px solid #2d3748;border-radius:12px;padding:28px;display:flex;flex-direction:column;align-items:center;gap:0">
+    <div class="org-node-root">⚡ ScaleUp Ventures</div>
+    <div class="connector">│</div>
+    <div style="display:flex;gap:40px;position:relative;">
+      <div style="position:absolute;top:0;left:60px;right:60px;height:2px;background:#334155;"></div>
+      
+      <div style="display:flex;flex-direction:column;align-items:center;gap:0">
+        <div class="connector">│</div>
+        <div class="org-node node-offerpath">🎯 OfferPath</div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <span class="badge badge-b2b">B2B</span>
+          <span class="badge badge-b2c">B2C</span>
+        </div>
+        <div style="font-size:11px;color:#64748b;margin-top:6px;text-align:center;">Job seekers + Employers</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;gap:0">
+        <div class="connector">│</div>
+        <div class="org-node node-prevyu">🎬 Prevyu</div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <span class="badge badge-b2c">B2C</span>
+        </div>
+        <div style="font-size:11px;color:#64748b;margin-top:6px;text-align:center;">Video review platform</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;gap:0">
+        <div class="connector">│</div>
+        <div class="org-node node-scaleup">🚀 ScaleUp Direct</div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <span class="badge badge-b2b">Clients</span>
+        </div>
+        <div style="font-size:11px;color:#64748b;margin-top:6px;text-align:center;">Direct client work</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DATA OBJECTS -->
+<div class="section">
+  <div class="section-title">Data Objects (Tables in Twenty)</div>
+  <div class="objects-grid">
+
+    <!-- Companies -->
+    <div class="object-card">
+      <div class="object-header bg-companies">
+        <div class="object-icon" style="background:#0ea5e922;">🏢</div>
+        <div>
+          <div class="object-name">Companies</div>
+          <div class="object-desc">Employer orgs, partners, clients</div>
+        </div>
+      </div>
+      <div class="object-fields">
+        <div class="field-row"><span class="field-name">Name</span><span class="field-type type-text">Text</span></div>
+        <div class="field-row"><span class="field-name">Product <span class="field-star">★</span></span><span class="field-type type-select">Select</span></div>
+        <div class="field-row"><span class="field-name">Type</span><span class="field-type type-select">Select</span></div>
+        <div class="field-row"><span class="field-name">Domain</span><span class="field-type type-text">Text</span></div>
+        <div class="field-row"><span class="field-name">Industry</span><span class="field-type type-select">Select</span></div>
+        <div class="field-row"><span class="field-name">Employees</span><span class="field-type type-relation">→ People</span></div>
+        <div class="field-row"><span class="field-name">Deals</span><span class="field-type type-relation">→ Opportunities</span></div>
+      </div>
+    </div>
+
+    <!-- People -->
+    <div class="object-card">
+      <div class="object-header bg-people">
+        <div class="object-icon" style="background:#8b5cf622;">👤</div>
+        <div>
+          <div class="object-name">People</div>
+          <div class="object-desc">Job seekers, VAs, contacts</div>
+        </div>
+      </div>
+      <div class="object-fields">
+        <div class="field-row"><span class="field-name">Name</span><span class="field-type type-text">Text</span></div>
+        <div class="field-row"><span class="field-name">Product <span class="field-star">★</span></span><span class="field-type type-select">Select</span></div>
+        <div class="field-row"><span class="field-name">Person Type <span class="field-star">★</span></span><span class="field-type type-select">Select</span></div>
+        <div class="field-row"><span class="field-name">Email</span><span class="field-type type-text">Text</span></div>
+        <div class="field-row"><span class="field-name">Job Title</span><span class="field-type type-text">Text</span></div>
+        <div class="field-row"><span class="field-name">Company</span><span class="field-type type-relation">→ Companies</span></div>
+        <div class="field-row"><span class="field-name">Opportunities</span><span class="field-type type-relation">→ Opportunities</span></div>
+      </div>
+    </div>
+
+    <!-- Opportunities -->
+    <div class="object-card">
+      <div class="object-header bg-opp">
+        <div class="object-icon" style="background:#10b98122;">💰</div>
+        <div>
+          <div class="object-name">Opportunities</div>
+          <div class="object-desc">Deals across all pipelines</div>
+        </div>
+      </div>
+      <div class="object-fields">
+        <div class="field-row"><span class="field-name">Name</span><span class="field-type type-text">Text</span></div>
+        <div class="field-row"><span class="field-name">Product <span class="field-star">★</span></span><span class="field-type type-select">Select</span></div>
+        <div class="field-row"><span class="field-name">Pipeline <span class="field-star">★</span></span><span class="field-type type-select">Select</span></div>
+        <div class="field-row"><span class="field-name">Stage</span><span class="field-type type-select">Select</span></div>
+        <div class="field-row"><span class="field-name">Amount</span><span class="field-type type-number">Number</span></div>
+        <div class="field-row"><span class="field-name">Close Date</span><span class="field-type type-date">Date</span></div>
+        <div class="field-row"><span class="field-name">Contact</span><span class="field-type type-relation">→ People</span></div>
+        <div class="field-row"><span class="field-name">Company</span><span class="field-type type-relation">→ Companies</span></div>
+      </div>
+    </div>
+
+    <!-- Custom: Job Order -->
+    <div class="object-card">
+      <div class="object-header bg-custom">
+        <div class="object-icon" style="background:#f59e0b22;">📋</div>
+        <div>
+          <div class="object-name">Job Orders <span style="font-size:10px;color:#f59e0b;background:#3a2a1a;padding:2px 6px;border-radius:4px;margin-left:4px;">CUSTOM</span></div>
+          <div class="object-desc">OfferPath application packages</div>
+        </div>
+      </div>
+      <div class="object-fields">
+        <div class="field-row"><span class="field-name">Client</span><span class="field-type type-relation">→ People</span></div>
+        <div class="field-row"><span class="field-name">Package</span><span class="field-type type-select">Select</span></div>
+        <div class="field-row"><span class="field-name">Apps Ordered</span><span class="field-type type-number">Number</span></div>
+        <div class="field-row"><span class="field-name">Apps Submitted</span><span class="field-type type-number">Number</span></div>
+        <div class="field-row"><span class="field-name">Interviews</span><span class="field-type type-number">Number</span></div>
+        <div class="field-row"><span class="field-name">Offer Received</span><span class="field-type type-bool">Boolean</span></div>
+        <div class="field-row"><span class="field-name">Status</span><span class="field-type type-select">Select</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Custom field values legend -->
+  <div style="margin-top:16px;background:#1e2533;border:1px solid #2d3748;border-radius:10px;padding:16px;">
+    <div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:10px;">★ KEY CUSTOM FIELDS — VALUES</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+      <div>
+        <div style="font-size:12px;color:#94a3b8;margin-bottom:6px;font-weight:600;">Product</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;">
+          <span style="padding:3px 9px;border-radius:4px;font-size:11px;background:#0ea5e922;color:#38bdf8;">OfferPath</span>
+          <span style="padding:3px 9px;border-radius:4px;font-size:11px;background:#8b5cf622;color:#a78bfa;">Prevyu</span>
+          <span style="padding:3px 9px;border-radius:4px;font-size:11px;background:#10b98122;color:#34d399;">ScaleUp</span>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:#94a3b8;margin-bottom:6px;font-weight:600;">Person Type</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;">
+          <span style="padding:3px 9px;border-radius:4px;font-size:11px;background:#1e3a5f;color:#60a5fa;">Job Seeker</span>
+          <span style="padding:3px 9px;border-radius:4px;font-size:11px;background:#1e3a5f;color:#60a5fa;">Employer</span>
+          <span style="padding:3px 9px;border-radius:4px;font-size:11px;background:#1e3a5f;color:#60a5fa;">Prevyu User</span>
+          <span style="padding:3px 9px;border-radius:4px;font-size:11px;background:#1e3a5f;color:#60a5fa;">ScaleUp Client</span>
+          <span style="padding:3px 9px;border-radius:4px;font-size:11px;background:#1e3a5f;color:#60a5fa;">VA</span>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:#94a3b8;margin-bottom:6px;font-weight:600;">Pipeline</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;">
+          <span style="padding:3px 9px;border-radius:4px;font-size:11px;background:#0ea5e922;color:#38bdf8;">OfferPath B2C</span>
+          <span style="padding:3px 9px;border-radius:4px;font-size:11px;background:#0ea5e922;color:#38bdf8;">OfferPath B2B</span>
+          <span style="padding:3px 9px;border-radius:4px;font-size:11px;background:#8b5cf622;color:#a78bfa;">Prevyu B2C</span>
+          <span style="padding:3px 9px;border-radius:4px;font-size:11px;background:#10b98122;color:#34d399;">ScaleUp</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PIPELINES -->
+<div class="section">
+  <div class="section-title">Sales Pipelines</div>
+  <div class="pipelines-grid">
+
+    <div class="pipeline-card">
+      <div class="pipeline-header">
+        <div class="pipeline-dot" style="background:#0ea5e9;"></div>
+        <div class="pipeline-name">OfferPath B2C</div>
+        <span class="pipeline-motion motion-b2c">B2C</span>
+      </div>
+      <div class="stages">
+        <div class="stage"><span class="stage-num" style="background:#334155;">1</span> Lead / Inquiry</div>
+        <div class="stage"><span class="stage-num" style="background:#0369a1;">2</span> Free Trial Started</div>
+        <div class="stage"><span class="stage-num" style="background:#0284c7;">3</span> Purchased Package</div>
+        <div class="stage"><span class="stage-num" style="background:#0ea5e9;">4</span> Active (Applying)</div>
+        <div class="stage"><span class="stage-num" style="background:#10b981;">5</span> Offer Received ✓</div>
+        <div class="stage"><span class="stage-num" style="background:#ef4444;">6</span> Churned</div>
+      </div>
+    </div>
+
+    <div class="pipeline-card">
+      <div class="pipeline-header">
+        <div class="pipeline-dot" style="background:#38bdf8;"></div>
+        <div class="pipeline-name">OfferPath B2B</div>
+        <span class="pipeline-motion motion-b2b">B2B</span>
+      </div>
+      <div class="stages">
+        <div class="stage"><span class="stage-num" style="background:#334155;">1</span> Prospect</div>
+        <div class="stage"><span class="stage-num" style="background:#0369a1;">2</span> Demo Scheduled</div>
+        <div class="stage"><span class="stage-num" style="background:#0284c7;">3</span> Proposal Sent</div>
+        <div class="stage"><span class="stage-num" style="background:#0ea5e9;">4</span> Negotiating</div>
+        <div class="stage"><span class="stage-num" style="background:#10b981;">5</span> Closed Won ✓</div>
+        <div class="stage"><span class="stage-num" style="background:#ef4444;">6</span> Closed Lost</div>
+      </div>
+    </div>
+
+    <div class="pipeline-card">
+      <div class="pipeline-header">
+        <div class="pipeline-dot" style="background:#8b5cf6;"></div>
+        <div class="pipeline-name">Prevyu B2C</div>
+        <span class="pipeline-motion motion-b2c">B2C</span>
+      </div>
+      <div class="stages">
+        <div class="stage"><span class="stage-num" style="background:#334155;">1</span> Waitlist</div>
+        <div class="stage"><span class="stage-num" style="background:#6d28d9;">2</span> Invited / Signed Up</div>
+        <div class="stage"><span class="stage-num" style="background:#7c3aed;">3</span> Onboarding</div>
+        <div class="stage"><span class="stage-num" style="background:#8b5cf6;">4</span> Active User</div>
+        <div class="stage"><span class="stage-num" style="background:#10b981;">5</span> Paying ✓</div>
+        <div class="stage"><span class="stage-num" style="background:#ef4444;">6</span> Churned</div>
+      </div>
+    </div>
+
+    <div class="pipeline-card">
+      <div class="pipeline-header">
+        <div class="pipeline-dot" style="background:#10b981;"></div>
+        <div class="pipeline-name">ScaleUp Clients</div>
+        <span class="pipeline-motion motion-client">Clients</span>
+      </div>
+      <div class="stages">
+        <div class="stage"><span class="stage-num" style="background:#334155;">1</span> Discovery Call</div>
+        <div class="stage"><span class="stage-num" style="background:#065f46;">2</span> Scoping</div>
+        <div class="stage"><span class="stage-num" style="background:#047857;">3</span> Proposal Sent</div>
+        <div class="stage"><span class="stage-num" style="background:#059669;">4</span> Contract Signed</div>
+        <div class="stage"><span class="stage-num" style="background:#10b981;">5</span> Active ✓</div>
+        <div class="stage"><span class="stage-num" style="background:#6b7280;">6</span> Completed</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- FILTER VIEWS -->
+<div class="section">
+  <div class="section-title">Saved Views (How You See Each Context)</div>
+  <div class="filter-examples">
+
+    <div class="filter-card">
+      <div class="filter-title">👥 OfferPath Job Seekers</div>
+      <div class="filter-chips">
+        <span class="chip chip-product">Product = OfferPath</span>
+        <span class="chip chip-type">Type = Job Seeker</span>
+      </div>
+      <div class="filter-result">→ All B2C clients in People</div>
+    </div>
+
+    <div class="filter-card">
+      <div class="filter-title">🏢 OfferPath Employer Pipeline</div>
+      <div class="filter-chips">
+        <span class="chip chip-product">Product = OfferPath</span>
+        <span class="chip chip-type">Pipeline = B2B</span>
+      </div>
+      <div class="filter-result">→ Opportunities board for B2B</div>
+    </div>
+
+    <div class="filter-card">
+      <div class="filter-title">🎬 Prevyu Active Users</div>
+      <div class="filter-chips">
+        <span class="chip chip-product">Product = Prevyu</span>
+        <span class="chip chip-stage">Stage = Active User</span>
+      </div>
+      <div class="filter-result">→ Engaged Prevyu users</div>
+    </div>
+
+    <div class="filter-card">
+      <div class="filter-title">🚀 ScaleUp Active Clients</div>
+      <div class="filter-chips">
+        <span class="chip chip-product">Product = ScaleUp</span>
+        <span class="chip chip-stage">Stage = Active</span>
+      </div>
+      <div class="filter-result">→ Current client engagements</div>
+    </div>
+
+    <div class="filter-card">
+      <div class="filter-title">📋 OfferPath Active Orders</div>
+      <div class="filter-chips">
+        <span class="chip chip-type">Object = Job Orders</span>
+        <span class="chip chip-stage">Status = Active</span>
+      </div>
+      <div class="filter-result">→ Job Orders custom object</div>
+    </div>
+
+    <div class="filter-card">
+      <div class="filter-title">🎯 All Open Deals</div>
+      <div class="filter-chips">
+        <span class="chip chip-stage">Stage ≠ Closed/Churned</span>
+      </div>
+      <div class="filter-result">→ Full pipeline, all products</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- FOOTER NOTE -->
+<div style="background:#1e2533;border:1px solid #2d3748;border-radius:10px;padding:16px;font-size:13px;color:#64748b;line-height:1.6;">
+  <strong style="color:#94a3b8;">Setup order:</strong>
+  1. Add <code style="background:#0f1117;padding:2px 5px;border-radius:3px;color:#60a5fa;">Product</code> select field to Companies, People, Opportunities &nbsp;→&nbsp;
+  2. Add <code style="background:#0f1117;padding:2px 5px;border-radius:3px;color:#a78bfa;">Person Type</code> to People &nbsp;→&nbsp;
+  3. Add <code style="background:#0f1117;padding:2px 5px;border-radius:3px;color:#34d399;">Pipeline</code> field to Opportunities &nbsp;→&nbsp;
+  4. Create pipeline stage values per product &nbsp;→&nbsp;
+  5. Create <code style="background:#0f1117;padding:2px 5px;border-radius:3px;color:#fb923c;">Job Orders</code> as a custom object &nbsp;→&nbsp;
+  6. Save views per product/motion
+</div>
+
+</body>
+</html>
