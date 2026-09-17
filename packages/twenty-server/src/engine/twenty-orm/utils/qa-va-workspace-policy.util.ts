@@ -39,6 +39,12 @@ const UUID_PATTERN =
 const QA_DISPOSITION_FIELD = 'qaDisposition';
 const NOTE_UPDATE_FIELDS = new Set(['bodyV2', 'title']);
 const TASK_UPDATE_FIELDS = new Set(['bodyV2', 'dueAt', 'status', 'title']);
+const UPDATED_BY_FIELDS = new Set([
+  'updatedBySource',
+  'updatedByWorkspaceMemberId',
+  'updatedByName',
+  'updatedByContext',
+]);
 const qaVaPolicyLogger = new Logger('QaVaWorkspacePolicy');
 
 const WRITE_POLICY: Readonly<Record<string, ReadonlySet<QaVaOperationType>>> = {
@@ -158,6 +164,7 @@ export const validateQaVaWorkspaceOperationOrThrow = ({
   entityName,
   operationType,
   updatedColumns = [],
+  updateValues = [],
   insertValues = [],
   isUpsert = false,
 }: {
@@ -165,6 +172,7 @@ export const validateQaVaWorkspaceOperationOrThrow = ({
   entityName: string;
   operationType: QaVaOperationType;
   updatedColumns?: string[];
+  updateValues?: Record<string, unknown>[];
   insertValues?: Record<string, unknown>[];
   isUpsert?: boolean;
 }) => {
@@ -206,14 +214,6 @@ export const validateQaVaWorkspaceOperationOrThrow = ({
     deny('upsert_not_allowed', { entityName });
   }
 
-  if (
-    entityName === 'person' &&
-    (updatedColumns.length === 0 ||
-      updatedColumns.some((column) => !config.personUpdateFields.has(column)))
-  ) {
-    deny('person_update_fields_not_allowlisted', { updatedColumns });
-  }
-
   const activityUpdateFields =
     entityName === 'note'
       ? NOTE_UPDATE_FIELDS
@@ -221,16 +221,56 @@ export const validateQaVaWorkspaceOperationOrThrow = ({
         ? TASK_UPDATE_FIELDS
         : null;
 
-  if (
-    operationType === 'update' &&
-    activityUpdateFields !== null &&
-    (updatedColumns.length === 0 ||
-      updatedColumns.some((column) => !activityUpdateFields.has(column)))
-  ) {
-    deny('activity_update_fields_not_allowlisted', {
-      entityName,
-      updatedColumns,
-    });
+  if (operationType === 'update') {
+    const businessUpdateFields =
+      entityName === 'person'
+        ? config.personUpdateFields
+        : activityUpdateFields;
+
+    if (
+      businessUpdateFields !== null &&
+      (updatedColumns.length === 0 ||
+        updatedColumns.some(
+          (column) =>
+            !businessUpdateFields.has(column) && !UPDATED_BY_FIELDS.has(column),
+        ))
+    ) {
+      deny('update_fields_not_allowlisted', {
+        entityName,
+        updatedColumns,
+      });
+    }
+
+    const updatedByColumns = updatedColumns.filter((column) =>
+      UPDATED_BY_FIELDS.has(column),
+    );
+
+    if (updatedByColumns.length > 0) {
+      const hasCompleteUpdatedByActor =
+        updatedByColumns.length === UPDATED_BY_FIELDS.size &&
+        updateValues.length > 0 &&
+        updateValues.every((value) => {
+          const context = value.updatedByContext;
+
+          return (
+            value.updatedBySource === 'MANUAL' &&
+            value.updatedByWorkspaceMemberId === config.workspaceMemberId &&
+            typeof value.updatedByName === 'string' &&
+            value.updatedByName.trim() !== '' &&
+            typeof context === 'object' &&
+            context !== null &&
+            !Array.isArray(context) &&
+            Object.keys(context).length === 0
+          );
+        });
+
+      if (!hasCompleteUpdatedByActor) {
+        deny('updated_by_actor_not_trusted', {
+          entityName,
+          updatedByColumns,
+        });
+      }
+    }
   }
 
   if (operationType !== 'insert') {

@@ -59,6 +59,30 @@ describe('validateQaVaWorkspaceOperationOrThrow', () => {
       }),
     ).not.toThrow();
 
+    expect(() =>
+      validateQaVaWorkspaceOperationOrThrow({
+        authContext: qaAuthContext,
+        entityName: 'person',
+        operationType: 'update',
+        updatedColumns: [
+          'qaDisposition',
+          'updatedBySource',
+          'updatedByWorkspaceMemberId',
+          'updatedByName',
+          'updatedByContext',
+        ],
+        updateValues: [
+          {
+            qaDisposition: 'booked',
+            updatedBySource: 'MANUAL',
+            updatedByWorkspaceMemberId: MEMBER_ID,
+            updatedByName: 'QA VA',
+            updatedByContext: {},
+          },
+        ],
+      }),
+    ).not.toThrow();
+
     for (const allowedUpdate of [
       { entityName: 'note', updatedColumns: ['title', 'bodyV2'] },
       {
@@ -171,6 +195,47 @@ describe('validateQaVaWorkspaceOperationOrThrow', () => {
         entityName: 'person',
         operationType: 'update',
         updatedColumns: ['name'],
+      }),
+    ).toThrow();
+  });
+
+  it('denies incomplete or forged framework-managed update attribution', () => {
+    for (const updateValues of [
+      [],
+      [
+        {
+          qaDisposition: 'booked',
+          updatedBySource: 'MANUAL',
+          updatedByWorkspaceMemberId: PERSON_ID,
+          updatedByName: 'QA VA',
+          updatedByContext: {},
+        },
+      ],
+    ]) {
+      expect(() =>
+        validateQaVaWorkspaceOperationOrThrow({
+          authContext: qaAuthContext,
+          entityName: 'person',
+          operationType: 'update',
+          updatedColumns: [
+            'qaDisposition',
+            'updatedBySource',
+            'updatedByWorkspaceMemberId',
+            'updatedByName',
+            'updatedByContext',
+          ],
+          updateValues,
+        }),
+      ).toThrow();
+    }
+
+    expect(() =>
+      validateQaVaWorkspaceOperationOrThrow({
+        authContext: qaAuthContext,
+        entityName: 'person',
+        operationType: 'update',
+        updatedColumns: ['qaDisposition', 'updatedBySource'],
+        updateValues: [{ qaDisposition: 'booked', updatedBySource: 'MANUAL' }],
       }),
     ).toThrow();
   });
