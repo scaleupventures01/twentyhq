@@ -37,8 +37,14 @@ const QA_VA_CONFIG_KEYS = [
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const QA_DISPOSITION_FIELD = 'qaDisposition';
-const NOTE_UPDATE_FIELDS = new Set(['bodyV2', 'title']);
-const TASK_UPDATE_FIELDS = new Set(['bodyV2', 'dueAt', 'status', 'title']);
+const RICH_TEXT_UPDATE_FIELDS = ['bodyV2', 'bodyV2Blocknote', 'bodyV2Markdown'];
+const NOTE_UPDATE_FIELDS = new Set([...RICH_TEXT_UPDATE_FIELDS, 'title']);
+const TASK_UPDATE_FIELDS = new Set([
+  ...RICH_TEXT_UPDATE_FIELDS,
+  'dueAt',
+  'status',
+  'title',
+]);
 const UPDATED_BY_FIELDS = new Set([
   'updatedBySource',
   'updatedByWorkspaceMemberId',

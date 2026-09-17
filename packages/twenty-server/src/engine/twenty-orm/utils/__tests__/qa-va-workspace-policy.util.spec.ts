@@ -84,10 +84,19 @@ describe('validateQaVaWorkspaceOperationOrThrow', () => {
     ).not.toThrow();
 
     for (const allowedUpdate of [
-      { entityName: 'note', updatedColumns: ['title', 'bodyV2'] },
+      {
+        entityName: 'note',
+        updatedColumns: ['title', 'bodyV2Blocknote', 'bodyV2Markdown'],
+      },
       {
         entityName: 'task',
-        updatedColumns: ['title', 'bodyV2', 'dueAt', 'status'],
+        updatedColumns: [
+          'title',
+          'bodyV2Blocknote',
+          'bodyV2Markdown',
+          'dueAt',
+          'status',
+        ],
       },
     ]) {
       expect(() =>
