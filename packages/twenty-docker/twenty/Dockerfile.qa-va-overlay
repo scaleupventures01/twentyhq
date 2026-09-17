@@ -1,0 +1,31 @@
+# Overlay the locally compiled backend on the exact upstream image already used
+# by ScaleUp. The unchanged frontend and dependency tree stay byte-for-byte
+# upstream, while CI independently rebuilds the backend from this source.
+FROM twentycrm/twenty@sha256:181ec8e25aaf952d002a53b94f289789daaeeed3edb54fbf3378fb7915237c1e
+
+ARG SOURCE_REVISION
+ENV QA_VA_POLICY_REQUIRED=true
+
+USER root
+RUN printf '%s\n' "$SOURCE_REVISION" | grep -Eq '^[0-9a-f]{40}$'
+RUN mv /app/entrypoint.sh /app/upstream-entrypoint.sh
+COPY --chmod=755 packages/twenty-docker/twenty/qa-va-entrypoint.sh /app/entrypoint.sh
+COPY --chmod=755 packages/twenty-docker/twenty/qa-va-binding-preflight.cjs /app/qa-va-binding-preflight.cjs
+USER 1000
+
+COPY --chown=1000 packages/twenty-server/dist/engine/core-modules/auth/auth.resolver.js /app/packages/twenty-server/dist/engine/core-modules/auth/auth.resolver.js
+COPY --chown=1000 packages/twenty-server/dist/engine/core-modules/tool-provider/services/tool-executor.service.js /app/packages/twenty-server/dist/engine/core-modules/tool-provider/services/tool-executor.service.js
+COPY --chown=1000 packages/twenty-server/dist/engine/core-modules/tool-provider/services/tool-registry.service.js /app/packages/twenty-server/dist/engine/core-modules/tool-provider/services/tool-registry.service.js
+COPY --chown=1000 packages/twenty-server/dist/engine/metadata-modules/permissions/permissions.service.js /app/packages/twenty-server/dist/engine/metadata-modules/permissions/permissions.service.js
+COPY --chown=1000 packages/twenty-server/dist/engine/twenty-orm/entity-manager/workspace-entity-manager.js /app/packages/twenty-server/dist/engine/twenty-orm/entity-manager/workspace-entity-manager.js
+COPY --chown=1000 packages/twenty-server/dist/engine/twenty-orm/repository/permissions.utils.js /app/packages/twenty-server/dist/engine/twenty-orm/repository/permissions.utils.js
+COPY --chown=1000 packages/twenty-server/dist/engine/twenty-orm/repository/workspace-delete-query-builder.js /app/packages/twenty-server/dist/engine/twenty-orm/repository/workspace-delete-query-builder.js
+COPY --chown=1000 packages/twenty-server/dist/engine/twenty-orm/repository/workspace-insert-query-builder.js /app/packages/twenty-server/dist/engine/twenty-orm/repository/workspace-insert-query-builder.js
+COPY --chown=1000 packages/twenty-server/dist/engine/twenty-orm/repository/workspace-select-query-builder.js /app/packages/twenty-server/dist/engine/twenty-orm/repository/workspace-select-query-builder.js
+COPY --chown=1000 packages/twenty-server/dist/engine/twenty-orm/repository/workspace-soft-delete-query-builder.js /app/packages/twenty-server/dist/engine/twenty-orm/repository/workspace-soft-delete-query-builder.js
+COPY --chown=1000 packages/twenty-server/dist/engine/twenty-orm/repository/workspace-update-query-builder.js /app/packages/twenty-server/dist/engine/twenty-orm/repository/workspace-update-query-builder.js
+COPY --chown=1000 packages/twenty-server/dist/engine/twenty-orm/utils/qa-va-workspace-policy.util.js /app/packages/twenty-server/dist/engine/twenty-orm/utils/qa-va-workspace-policy.util.js
+
+LABEL org.opencontainers.image.source="https://github.com/scaleupventures01/twentyhq"
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
+LABEL org.opencontainers.image.description="Twenty v2.8.3 with ScaleUp QA VA workspace policy"

@@ -34,6 +34,7 @@ import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import { isQaVaToolContext } from 'src/engine/twenty-orm/utils/qa-va-workspace-policy.util';
 
 @Injectable()
 export class ToolExecutorService {
@@ -60,6 +61,23 @@ export class ToolExecutorService {
     args: Record<string, unknown> | undefined,
     context: ToolProviderContext,
   ): Promise<ToolOutput> {
+    if (
+      isQaVaToolContext({
+        userWorkspaceId: context.userWorkspaceId,
+        userId:
+          context.userId ??
+          (context.authContext?.type === 'user'
+            ? context.authContext.user.id
+            : undefined),
+      })
+    ) {
+      return {
+        success: false,
+        message: 'Tools are disabled for the QA VA identity',
+        error: 'Tool execution is disabled for this restricted QA identity.',
+      };
+    }
+
     const safeArgs = args ?? {};
 
     switch (descriptor.executionRef.kind) {

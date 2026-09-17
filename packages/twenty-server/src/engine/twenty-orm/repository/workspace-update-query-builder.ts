@@ -107,6 +107,7 @@ export class WorkspaceUpdateQueryBuilder<
         return this.executeMany();
       }
       validateQueryIsPermittedOrThrow({
+        authContext: this.authContext,
         expressionMap: this.expressionMap,
         objectsPermissions: this.objectRecordsPermissions,
         flatObjectMetadataMaps: this.internalContext.flatObjectMetadataMaps,
@@ -313,6 +314,7 @@ export class WorkspaceUpdateQueryBuilder<
         );
 
         validateQueryIsPermittedOrThrow({
+          authContext: this.authContext,
           expressionMap: fakeExpressionMapToValidatePermissions,
           objectsPermissions: this.objectRecordsPermissions,
           flatObjectMetadataMaps: this.internalContext.flatObjectMetadataMaps,

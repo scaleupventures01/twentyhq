@@ -75,6 +75,7 @@ export class WorkspaceDeleteQueryBuilder<
     try {
       this.applyRowLevelPermissionPredicates();
       validateQueryIsPermittedOrThrow({
+        authContext: this.authContext,
         expressionMap: this.expressionMap,
         objectsPermissions: this.objectRecordsPermissions,
         flatObjectMetadataMaps: this.internalContext.flatObjectMetadataMaps,

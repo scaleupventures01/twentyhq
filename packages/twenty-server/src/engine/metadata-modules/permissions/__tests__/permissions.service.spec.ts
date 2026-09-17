@@ -16,6 +16,20 @@ import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/works
 describe('PermissionsService', () => {
   let service: PermissionsService;
 
+  const qaPolicyEnvironment = {
+    QA_VA_POLICY_REQUIRED: 'true',
+    QA_VA_WORKSPACE_ID: '11111111-1111-4111-8111-111111111111',
+    QA_VA_WORKSPACE_MEMBER_ID: '22222222-2222-4222-8222-222222222222',
+    QA_VA_USER_WORKSPACE_ID: '33333333-3333-4333-8333-333333333333',
+    QA_VA_USER_ID: '44444444-4444-4444-8444-444444444444',
+    QA_VA_USER_EMAIL: 'qa-va@example.com',
+    QA_VA_PERSON_UPDATE_FIELDS: 'qaDisposition',
+  } as const;
+
+  const originalQaPolicyEnvironment = Object.fromEntries(
+    Object.keys(qaPolicyEnvironment).map((key) => [key, process.env[key]]),
+  );
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -44,6 +58,88 @@ describe('PermissionsService', () => {
     }).compile();
 
     service = module.get<PermissionsService>(PermissionsService);
+  });
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(originalQaPolicyEnvironment)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  });
+
+  describe('QA VA workspace binding', () => {
+    const roleWithAllToolsAndSettings = {
+      id: 'qa-role-id',
+      canAccessAllTools: true,
+      canUpdateAllSettings: true,
+      rolePermissionFlags: [],
+    } as unknown as RoleEntity;
+
+    beforeEach(() => {
+      Object.assign(process.env, qaPolicyEnvironment);
+
+      (service as any).userRoleService = {
+        getRolesByUserWorkspaces: jest.fn().mockResolvedValue(
+          new Map([
+            [
+              qaPolicyEnvironment.QA_VA_USER_WORKSPACE_ID,
+              [roleWithAllToolsAndSettings],
+            ],
+            [
+              '55555555-5555-4555-8555-555555555555',
+              [roleWithAllToolsAndSettings],
+            ],
+          ]),
+        ),
+      };
+      (service as any).workspaceCacheService = {
+        getOrRecompute: jest.fn().mockResolvedValue({
+          rolesPermissions: {
+            [roleWithAllToolsAndSettings.id]: {
+              person: { canReadObjectRecords: true },
+            },
+          },
+        }),
+      };
+    });
+
+    it('strips every tool and settings permission from the exact QA membership', async () => {
+      const permissions = await service.getUserWorkspacePermissions({
+        userWorkspaceId: qaPolicyEnvironment.QA_VA_USER_WORKSPACE_ID,
+        workspaceId: qaPolicyEnvironment.QA_VA_WORKSPACE_ID,
+      });
+
+      expect(Object.values(permissions.permissionFlags)).toEqual(
+        expect.arrayContaining([false]),
+      );
+      expect(
+        Object.values(permissions.permissionFlags).every((value) => !value),
+      ).toBe(true);
+      expect(permissions.objectsPermissions).toEqual({
+        person: { canReadObjectRecords: true },
+      });
+      await expect(
+        service.userHasWorkspaceSettingPermission({
+          userWorkspaceId: qaPolicyEnvironment.QA_VA_USER_WORKSPACE_ID,
+          workspaceId: qaPolicyEnvironment.QA_VA_WORKSPACE_ID,
+          setting: PermissionFlagType.EXPORT_CSV,
+        }),
+      ).resolves.toBe(false);
+    });
+
+    it('leaves an unrelated workspace membership on the ordinary role path', async () => {
+      const permissions = await service.getUserWorkspacePermissions({
+        userWorkspaceId: '55555555-5555-4555-8555-555555555555',
+        workspaceId: qaPolicyEnvironment.QA_VA_WORKSPACE_ID,
+      });
+
+      expect(permissions.permissionFlags[PermissionFlagType.EXPORT_CSV]).toBe(
+        true,
+      );
+    });
   });
 
   describe('checkRolePermissions', () => {

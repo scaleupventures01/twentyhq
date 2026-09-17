@@ -68,6 +68,7 @@ import { UserService } from 'src/engine/core-modules/user/services/user.service'
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { AuthProviderEnum } from 'src/engine/core-modules/workspace/types/workspace.type';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { isQaVaToolContext } from 'src/engine/twenty-orm/utils/qa-va-workspace-policy.util';
 import { AuthProvider } from 'src/engine/decorators/auth/auth-provider.decorator';
 import { AuthUser } from 'src/engine/decorators/auth/auth-user.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
@@ -512,6 +513,13 @@ export class AuthResolver {
     @AuthUser() currentUser: AuthContextUser,
     @AuthProvider() authProvider: AuthProviderEnum,
   ): Promise<SignUpDTO> {
+    if (isQaVaToolContext({ userId: currentUser.id })) {
+      throw new AuthException(
+        'The restricted QA identity cannot create another workspace',
+        AuthExceptionCode.FORBIDDEN_EXCEPTION,
+      );
+    }
+
     const fullUser = await this.userService.findUserByIdOrThrow(currentUser.id);
 
     const { user, workspace } = await this.signInUpService.signUpOnNewWorkspace(

@@ -20,6 +20,7 @@ import {
   type ORMWorkspaceContext,
 } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { getObjectMetadataFromEntityTarget } from 'src/engine/twenty-orm/utils/get-object-metadata-from-entity-target.util';
+import { formatData } from 'src/engine/twenty-orm/utils/format-data.util';
 
 import { WorkspaceEntityManager } from './workspace-entity-manager';
 
@@ -441,6 +442,8 @@ describe('WorkspaceEntityManager', () => {
 
   describe('Save Methods', () => {
     it('should call validatePermissions and validateOperationIsPermittedOrThrow for save', async () => {
+      (formatData as jest.Mock).mockReturnValueOnce([{ id: 'new-id' }]);
+
       await withWorkspaceContext(mockWorkspaceContext, () =>
         entityManager.save(
           'test-entity',
@@ -451,21 +454,84 @@ describe('WorkspaceEntityManager', () => {
       );
       expect(entityManager['validatePermissions']).toHaveBeenCalledWith({
         target: 'test-entity',
+        operationType: 'insert',
+        permissionOptions: mockPermissionOptions,
+        selectedColumns: [],
+        updatedColumns: ['id'],
+        insertValues: [{ id: 'new-id' }],
+      });
+      expect(validateOperationIsPermittedOrThrow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          authContext: mockWorkspaceContext.authContext,
+          entityName: 'test-entity',
+          operationType: 'insert',
+          insertValues: [{ id: 'new-id' }],
+          updatedColumns: ['id'],
+        }),
+      );
+    });
+
+    it('classifies an existing save record as an update', async () => {
+      jest
+        .spyOn(entityManager, 'find')
+        .mockResolvedValueOnce([{ id: 'existing-id' }]);
+      (formatData as jest.Mock).mockReturnValueOnce([
+        { id: 'existing-id', qaDisposition: 'complete' },
+      ]);
+
+      await withWorkspaceContext(mockWorkspaceContext, () =>
+        entityManager.save(
+          'test-entity',
+          { id: 'existing-id', qaDisposition: 'complete' },
+          { reload: false },
+          mockPermissionOptions,
+        ),
+      );
+
+      expect(entityManager['validatePermissions']).toHaveBeenCalledWith({
+        target: 'test-entity',
         operationType: 'update',
         permissionOptions: mockPermissionOptions,
         selectedColumns: [],
-        updatedColumns: [],
+        updatedColumns: ['id', 'qaDisposition'],
       });
-      expect(validateOperationIsPermittedOrThrow).toHaveBeenCalledWith({
-        entityName: 'test-entity',
+    });
+
+    it('classifies mixed save records independently', async () => {
+      jest
+        .spyOn(entityManager, 'find')
+        .mockResolvedValueOnce([{ id: 'existing-id' }]);
+      (formatData as jest.Mock).mockReturnValueOnce([
+        { id: 'existing-id', qaDisposition: 'complete' },
+        { id: 'new-id', title: 'new activity' },
+      ]);
+
+      await withWorkspaceContext(mockWorkspaceContext, () =>
+        entityManager.save(
+          'test-entity',
+          [
+            { id: 'existing-id', qaDisposition: 'complete' },
+            { id: 'new-id', title: 'new activity' },
+          ],
+          { reload: false },
+          mockPermissionOptions,
+        ),
+      );
+
+      expect(entityManager['validatePermissions']).toHaveBeenCalledWith({
+        target: 'test-entity',
         operationType: 'update',
-        flatObjectMetadataMaps: mockInternalContext.flatObjectMetadataMaps,
-        flatFieldMetadataMaps: mockInternalContext.flatFieldMetadataMaps,
-        objectIdByNameSingular: mockInternalContext.objectIdByNameSingular,
-        objectsPermissions: mockPermissionOptions.objectRecordsPermissions,
+        permissionOptions: mockPermissionOptions,
         selectedColumns: [],
-        allFieldsSelected: false,
-        updatedColumns: [],
+        updatedColumns: ['id', 'qaDisposition'],
+      });
+      expect(entityManager['validatePermissions']).toHaveBeenCalledWith({
+        target: 'test-entity',
+        operationType: 'insert',
+        permissionOptions: mockPermissionOptions,
+        selectedColumns: [],
+        updatedColumns: ['id', 'title'],
+        insertValues: [{ id: 'new-id', title: 'new activity' }],
       });
     });
   });
@@ -495,17 +561,14 @@ describe('WorkspaceEntityManager', () => {
         permissionOptions: mockPermissionOptions,
         selectedColumns: [],
       });
-      expect(validateOperationIsPermittedOrThrow).toHaveBeenCalledWith({
-        entityName: 'test-entity',
-        operationType: 'delete',
-        flatObjectMetadataMaps: mockInternalContext.flatObjectMetadataMaps,
-        flatFieldMetadataMaps: mockInternalContext.flatFieldMetadataMaps,
-        objectIdByNameSingular: mockInternalContext.objectIdByNameSingular,
-        objectsPermissions: mockPermissionOptions.objectRecordsPermissions,
-        selectedColumns: [],
-        allFieldsSelected: false,
-        updatedColumns: [],
-      });
+      expect(validateOperationIsPermittedOrThrow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          authContext: mockWorkspaceContext.authContext,
+          entityName: 'test-entity',
+          operationType: 'delete',
+          updatedColumns: [],
+        }),
+      );
     });
   });
 });
