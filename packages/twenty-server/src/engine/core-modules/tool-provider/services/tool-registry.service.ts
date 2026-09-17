@@ -20,6 +20,7 @@ import {
   wrapJsonSchemaForExecution,
 } from 'src/engine/core-modules/tool/utils/wrap-tool-for-execution.util';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
+import { isQaVaToolContext } from 'src/engine/twenty-orm/utils/qa-va-workspace-policy.util';
 
 @Injectable()
 export class ToolRegistryService {
@@ -35,6 +36,19 @@ export class ToolRegistryService {
   // Underlying data (metadata, permissions) is already cached by WorkspaceCacheService.
   // Providers run in parallel since they are independent.
   async getCatalog(context: ToolProviderContext): Promise<ToolIndexEntry[]> {
+    if (
+      isQaVaToolContext({
+        userWorkspaceId: context.userWorkspaceId,
+        userId:
+          context.userId ??
+          (context.authContext?.type === 'user'
+            ? context.authContext.user.id
+            : undefined),
+      })
+    ) {
+      return [];
+    }
+
     const results = await Promise.all(
       this.providers.map(async (provider) => {
         if (await provider.isAvailable(context)) {

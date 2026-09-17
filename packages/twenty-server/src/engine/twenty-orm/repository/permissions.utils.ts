@@ -9,6 +9,7 @@ import { isDefined } from 'twenty-shared/utils';
 import { type QueryExpressionMap } from 'typeorm/query-builder/QueryExpressionMap';
 
 import { ProcessAggregateHelper } from 'src/engine/api/graphql/graphql-query-runner/helpers/process-aggregate.helper';
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { InternalServerError } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
@@ -20,6 +21,7 @@ import {
   PermissionsExceptionMessage,
 } from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { getColumnNameToFieldMetadataIdMap } from 'src/engine/twenty-orm/utils/get-column-name-to-field-metadata-id.util';
+import { validateQaVaWorkspaceOperationOrThrow } from 'src/engine/twenty-orm/utils/qa-va-workspace-policy.util';
 
 const WORKSPACE_MEMBER_OBJECT_UNIVERSAL_IDENTIFIER =
   STANDARD_OBJECTS.workspaceMember.universalIdentifier;
@@ -70,6 +72,7 @@ export type OperationType =
   | 'soft-delete';
 
 type ValidateOperationIsPermittedOrThrowArgs = {
+  authContext: WorkspaceAuthContext;
   entityName: string;
   operationType: OperationType;
   objectsPermissions: ObjectsPermissions;
@@ -79,9 +82,12 @@ type ValidateOperationIsPermittedOrThrowArgs = {
   selectedColumns: string[] | '*';
   allFieldsSelected: boolean;
   updatedColumns: string[];
+  insertValues?: Record<string, unknown>[];
+  isUpsert?: boolean;
 };
 
 export const validateOperationIsPermittedOrThrow = ({
+  authContext,
   entityName,
   operationType,
   objectsPermissions,
@@ -91,7 +97,18 @@ export const validateOperationIsPermittedOrThrow = ({
   selectedColumns,
   allFieldsSelected,
   updatedColumns,
+  insertValues,
+  isUpsert,
 }: ValidateOperationIsPermittedOrThrowArgs) => {
+  validateQaVaWorkspaceOperationOrThrow({
+    authContext,
+    entityName,
+    operationType,
+    updatedColumns,
+    insertValues,
+    isUpsert,
+  });
+
   const objectMetadataIdForEntity = objectIdByNameSingular[entityName];
 
   if (!isNonEmptyString(objectMetadataIdForEntity)) {
@@ -245,6 +262,7 @@ export const validateOperationIsPermittedOrThrow = ({
 };
 
 type ValidateQueryIsPermittedOrThrowArgs = {
+  authContext: WorkspaceAuthContext;
   expressionMap: QueryExpressionMap;
   objectsPermissions: ObjectsPermissions;
   flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>;
@@ -254,6 +272,7 @@ type ValidateQueryIsPermittedOrThrowArgs = {
 };
 
 export const validateQueryIsPermittedOrThrow = ({
+  authContext,
   expressionMap,
   objectsPermissions,
   flatObjectMetadataMaps,
@@ -261,14 +280,40 @@ export const validateQueryIsPermittedOrThrow = ({
   objectIdByNameSingular,
   shouldBypassPermissionChecks,
 }: ValidateQueryIsPermittedOrThrowArgs) => {
-  if (shouldBypassPermissionChecks) {
-    return;
-  }
-
   const { mainEntity, operationType, isSubQuery } =
     getTargetEntityAndOperationType(expressionMap);
 
   if (isSubQuery) {
+    return;
+  }
+
+  const policyUpdatedColumns =
+    operationType === 'select'
+      ? []
+      : Array.isArray(expressionMap.valuesSet)
+        ? [
+            ...new Set(
+              expressionMap.valuesSet.flatMap((value) => Object.keys(value)),
+            ),
+          ]
+        : Object.keys(expressionMap.valuesSet ?? {});
+  const policyInsertValues =
+    operationType !== 'insert'
+      ? []
+      : Array.isArray(expressionMap.valuesSet)
+        ? expressionMap.valuesSet
+        : [expressionMap.valuesSet].filter(isDefined);
+
+  validateQaVaWorkspaceOperationOrThrow({
+    authContext,
+    entityName: mainEntity,
+    operationType,
+    updatedColumns: policyUpdatedColumns,
+    insertValues: policyInsertValues as Record<string, unknown>[],
+    isUpsert: operationType === 'insert' && isDefined(expressionMap.onUpdate),
+  });
+
+  if (shouldBypassPermissionChecks) {
     return;
   }
 
@@ -277,6 +322,7 @@ export const validateQueryIsPermittedOrThrow = ({
   if (!isEmpty(expressionMap.joinAttributes)) {
     const { selectsWithoutJoinedAliases } =
       validatePermissionsForJoinsAndReturnSelectsWithoutJoins({
+        authContext,
         expressionMap,
         objectsPermissions,
         flatObjectMetadataMaps,
@@ -322,6 +368,7 @@ export const validateQueryIsPermittedOrThrow = ({
   }
 
   validateOperationIsPermittedOrThrow({
+    authContext,
     entityName: mainEntity,
     operationType: operationType as OperationType,
     objectsPermissions,
@@ -331,16 +378,20 @@ export const validateQueryIsPermittedOrThrow = ({
     selectedColumns,
     allFieldsSelected,
     updatedColumns,
+    insertValues: policyInsertValues as Record<string, unknown>[],
+    isUpsert: operationType === 'insert' && isDefined(expressionMap.onUpdate),
   });
 };
 
 const validatePermissionsForJoinsAndReturnSelectsWithoutJoins = ({
+  authContext,
   expressionMap,
   objectsPermissions,
   flatObjectMetadataMaps,
   flatFieldMetadataMaps,
   objectIdByNameSingular,
 }: {
+  authContext: WorkspaceAuthContext;
   expressionMap: QueryExpressionMap;
   objectsPermissions: ObjectsPermissions;
   flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>;
@@ -375,6 +426,7 @@ const validatePermissionsForJoinsAndReturnSelectsWithoutJoins = ({
           });
 
           validateOperationIsPermittedOrThrow({
+            authContext,
             entityName: entity.name,
             operationType: 'select' as OperationType,
             objectsPermissions,

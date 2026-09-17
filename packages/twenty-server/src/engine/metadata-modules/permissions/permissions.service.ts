@@ -25,6 +25,7 @@ import { type UserWorkspacePermissions } from 'src/engine/metadata-modules/permi
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
 import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
+import { isQaVaUserWorkspaceBinding } from 'src/engine/twenty-orm/utils/qa-va-workspace-policy.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 @Injectable()
@@ -92,6 +93,14 @@ export class PermissionsService {
 
     const objectsPermissions = rolesPermissions[roleOfUserWorkspace.id] ?? {};
 
+    if (isQaVaUserWorkspaceBinding({ userWorkspaceId, workspaceId })) {
+      return {
+        permissionFlags:
+          this.getDefaultUserWorkspacePermissions().permissionFlags,
+        objectsPermissions,
+      };
+    }
+
     return {
       permissionFlags,
       objectsPermissions,
@@ -143,6 +152,13 @@ export class PermissionsService {
     apiKeyId?: string;
     applicationId?: string;
   }): Promise<boolean> {
+    if (
+      isDefined(userWorkspaceId) &&
+      isQaVaUserWorkspaceBinding({ userWorkspaceId, workspaceId })
+    ) {
+      return false;
+    }
+
     if (isDefined(apiKeyId)) {
       const roleId = await this.apiKeyRoleService.getRoleIdForApiKeyId(
         apiKeyId,

@@ -66,6 +66,7 @@ import { formatData } from 'src/engine/twenty-orm/utils/format-data.util';
 import { formatResult } from 'src/engine/twenty-orm/utils/format-result.util';
 import { formatTwentyOrmEventToDatabaseBatchEvent } from 'src/engine/twenty-orm/utils/format-twenty-orm-event-to-database-batch-event.util';
 import { getObjectMetadataFromEntityTarget } from 'src/engine/twenty-orm/utils/get-object-metadata-from-entity-target.util';
+import { validateQaVaWorkspaceOperationOrThrow } from 'src/engine/twenty-orm/utils/qa-va-workspace-policy.util';
 import { type WorkspaceEventEmitter } from 'src/engine/workspace-event-emitter/workspace-event-emitter';
 
 type PermissionOptions = {
@@ -249,7 +250,7 @@ export class WorkspaceEntityManager extends EntityManager {
       permissionOptions,
     )
       .insert()
-      .setWorkspaceAuthContext(authContext ?? ({} as WorkspaceAuthContext))
+      .setWorkspaceAuthContext(authContext ?? this.authContext)
       .values(entity)
       .returning(selectedColumns)
       .execute();
@@ -449,6 +450,7 @@ export class WorkspaceEntityManager extends EntityManager {
     permissionOptions,
     selectedColumns,
     updatedColumns = [],
+    insertValues = [],
   }: {
     target: EntityTarget<Entity> | Entity;
     operationType: OperationType;
@@ -458,17 +460,27 @@ export class WorkspaceEntityManager extends EntityManager {
     };
     selectedColumns: string[];
     updatedColumns?: string[];
+    insertValues?: Record<string, unknown>[];
   }): void {
-    if (permissionOptions?.shouldBypassPermissionChecks === true) {
-      return;
-    }
-
     const entityName =
       typeof target === 'function' || typeof target === 'string'
         ? this.extractTargetNameSingularFromEntityTarget(target)
         : this.extractTargetNameSingularFromEntity(target);
 
+    if (permissionOptions?.shouldBypassPermissionChecks === true) {
+      validateQaVaWorkspaceOperationOrThrow({
+        authContext: this.authContext,
+        entityName,
+        operationType,
+        updatedColumns,
+        insertValues,
+      });
+
+      return;
+    }
+
     validateOperationIsPermittedOrThrow({
+      authContext: this.authContext,
       entityName,
       operationType,
       objectsPermissions: permissionOptions?.objectRecordsPermissions ?? {},
@@ -478,6 +490,7 @@ export class WorkspaceEntityManager extends EntityManager {
       selectedColumns,
       allFieldsSelected: false,
       updatedColumns,
+      insertValues,
     });
   }
 
@@ -1258,17 +1271,45 @@ export class WorkspaceEntityManager extends EntityManager {
         this.internalContext.flatFieldMetadataMaps,
       );
 
-      const updatedColumns = formattedEntityOrEntities
-        .map((e) => Object.keys(e))
-        .flat();
+      const entitiesToUpdate = formattedEntityOrEntities.filter(
+        (formattedEntity) => beforeUpdateMapById[formattedEntity.id],
+      );
+      const entitiesToInsert = formattedEntityOrEntities.filter(
+        (formattedEntity) => !beforeUpdateMapById[formattedEntity.id],
+      );
 
-      this.validatePermissions({
-        target: targetOrEntity,
-        operationType: 'update',
-        permissionOptions: permissionOptionsFromArgs,
-        selectedColumns: [],
-        updatedColumns,
-      });
+      if (entitiesToUpdate.length > 0) {
+        this.validatePermissions({
+          target: targetOrEntity,
+          operationType: 'update',
+          permissionOptions: permissionOptionsFromArgs,
+          selectedColumns: [],
+          updatedColumns: [
+            ...new Set(
+              entitiesToUpdate.flatMap((entityToUpdate) =>
+                Object.keys(entityToUpdate),
+              ),
+            ),
+          ],
+        });
+      }
+
+      if (entitiesToInsert.length > 0) {
+        this.validatePermissions({
+          target: targetOrEntity,
+          operationType: 'insert',
+          permissionOptions: permissionOptionsFromArgs,
+          selectedColumns: [],
+          updatedColumns: [
+            ...new Set(
+              entitiesToInsert.flatMap((entityToInsert) =>
+                Object.keys(entityToInsert),
+              ),
+            ),
+          ],
+          insertValues: entitiesToInsert,
+        });
+      }
 
       const result = await new EntityPersistExecutor(
         this.connection,
