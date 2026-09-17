@@ -116,6 +116,15 @@ describe('validateQaVaWorkspaceOperationOrThrow', () => {
           id: RECORD_ID,
           noteId: PARENT_ID,
           targetPersonId: PERSON_ID,
+          position: 1,
+          createdBySource: 'MANUAL',
+          createdByWorkspaceMemberId: MEMBER_ID,
+          createdByName: 'QA VA',
+          createdByContext: {},
+          updatedBySource: 'MANUAL',
+          updatedByWorkspaceMemberId: MEMBER_ID,
+          updatedByName: 'QA VA',
+          updatedByContext: {},
         },
       },
       {
@@ -132,6 +141,15 @@ describe('validateQaVaWorkspaceOperationOrThrow', () => {
           id: RECORD_ID,
           taskId: PARENT_ID,
           targetPersonId: PERSON_ID,
+          position: 1,
+          createdBySource: 'MANUAL',
+          createdByWorkspaceMemberId: MEMBER_ID,
+          createdByName: 'QA VA',
+          createdByContext: {},
+          updatedBySource: 'MANUAL',
+          updatedByWorkspaceMemberId: MEMBER_ID,
+          updatedByName: 'QA VA',
+          updatedByContext: {},
         },
       },
     ];
@@ -271,6 +289,36 @@ describe('validateQaVaWorkspaceOperationOrThrow', () => {
         entityName: 'taskTarget',
         insertValues: [
           { id: RECORD_ID, taskId: PARENT_ID, targetOpportunityId: PERSON_ID },
+        ],
+      },
+      {
+        entityName: 'noteTarget',
+        insertValues: [
+          {
+            id: RECORD_ID,
+            noteId: PARENT_ID,
+            targetPersonId: PERSON_ID,
+            position: 1,
+            createdBySource: 'MANUAL',
+            createdByWorkspaceMemberId: PERSON_ID,
+            createdByName: 'QA VA',
+            createdByContext: {},
+            updatedBySource: 'MANUAL',
+            updatedByWorkspaceMemberId: MEMBER_ID,
+            updatedByName: 'QA VA',
+            updatedByContext: {},
+          },
+        ],
+      },
+      {
+        entityName: 'taskTarget',
+        insertValues: [
+          {
+            id: RECORD_ID,
+            taskId: PARENT_ID,
+            targetPersonId: PERSON_ID,
+            position: 'last',
+          },
         ],
       },
     ];

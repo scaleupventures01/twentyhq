@@ -45,6 +45,12 @@ const UPDATED_BY_FIELDS = new Set([
   'updatedByName',
   'updatedByContext',
 ]);
+const CREATED_BY_FIELDS = new Set([
+  'createdBySource',
+  'createdByWorkspaceMemberId',
+  'createdByName',
+  'createdByContext',
+]);
 const qaVaPolicyLogger = new Logger('QaVaWorkspacePolicy');
 
 const WRITE_POLICY: Readonly<Record<string, ReadonlySet<QaVaOperationType>>> = {
@@ -72,6 +78,29 @@ const deny = (
   throw new PermissionsException(
     PermissionsExceptionMessage.PERMISSION_DENIED,
     PermissionsExceptionCode.PERMISSION_DENIED,
+  );
+};
+
+const hasTrustedManualActor = ({
+  value,
+  prefix,
+  workspaceMemberId,
+}: {
+  value: Record<string, unknown>;
+  prefix: 'createdBy' | 'updatedBy';
+  workspaceMemberId: string;
+}) => {
+  const context = value[`${prefix}Context`];
+
+  return (
+    value[`${prefix}Source`] === 'MANUAL' &&
+    value[`${prefix}WorkspaceMemberId`] === workspaceMemberId &&
+    typeof value[`${prefix}Name`] === 'string' &&
+    String(value[`${prefix}Name`]).trim() !== '' &&
+    typeof context === 'object' &&
+    context !== null &&
+    !Array.isArray(context) &&
+    Object.keys(context).length === 0
   );
 };
 
@@ -249,20 +278,13 @@ export const validateQaVaWorkspaceOperationOrThrow = ({
       const hasCompleteUpdatedByActor =
         updatedByColumns.length === UPDATED_BY_FIELDS.size &&
         updateValues.length > 0 &&
-        updateValues.every((value) => {
-          const context = value.updatedByContext;
-
-          return (
-            value.updatedBySource === 'MANUAL' &&
-            value.updatedByWorkspaceMemberId === config.workspaceMemberId &&
-            typeof value.updatedByName === 'string' &&
-            value.updatedByName.trim() !== '' &&
-            typeof context === 'object' &&
-            context !== null &&
-            !Array.isArray(context) &&
-            Object.keys(context).length === 0
-          );
-        });
+        updateValues.every((value) =>
+          hasTrustedManualActor({
+            value,
+            prefix: 'updatedBy',
+            workspaceMemberId: config.workspaceMemberId,
+          }),
+        );
 
       if (!hasCompleteUpdatedByActor) {
         deny('updated_by_actor_not_trusted', {
@@ -297,15 +319,49 @@ export const validateQaVaWorkspaceOperationOrThrow = ({
 
   if (entityName === 'noteTarget' || entityName === 'taskTarget') {
     const parentIdField = entityName === 'noteTarget' ? 'noteId' : 'taskId';
-    const allowedKeys = new Set(['id', parentIdField, 'targetPersonId']);
+    const allowedKeys = new Set([
+      'id',
+      parentIdField,
+      'targetPersonId',
+      'position',
+      ...CREATED_BY_FIELDS,
+      ...UPDATED_BY_FIELDS,
+    ]);
 
     if (
-      insertValues.some(
-        (value) =>
+      insertValues.some((value) => {
+        const createdByKeys = Object.keys(value).filter((key) =>
+          CREATED_BY_FIELDS.has(key),
+        );
+        const updatedByKeys = Object.keys(value).filter((key) =>
+          UPDATED_BY_FIELDS.has(key),
+        );
+        const hasValidPosition =
+          value.position === undefined ||
+          (typeof value.position === 'number' &&
+            Number.isFinite(value.position));
+
+        return (
           !UUID_PATTERN.test(String(value[parentIdField] ?? '')) ||
           !UUID_PATTERN.test(String(value.targetPersonId ?? '')) ||
-          Object.keys(value).some((key) => !allowedKeys.has(key)),
-      )
+          !hasValidPosition ||
+          Object.keys(value).some((key) => !allowedKeys.has(key)) ||
+          (createdByKeys.length > 0 &&
+            (createdByKeys.length !== CREATED_BY_FIELDS.size ||
+              !hasTrustedManualActor({
+                value,
+                prefix: 'createdBy',
+                workspaceMemberId: config.workspaceMemberId,
+              }))) ||
+          (updatedByKeys.length > 0 &&
+            (updatedByKeys.length !== UPDATED_BY_FIELDS.size ||
+              !hasTrustedManualActor({
+                value,
+                prefix: 'updatedBy',
+                workspaceMemberId: config.workspaceMemberId,
+              })))
+        );
+      })
     ) {
       deny('activity_target_not_person_only', {
         entityName,
