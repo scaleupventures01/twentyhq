@@ -82,6 +82,7 @@ type ValidateOperationIsPermittedOrThrowArgs = {
   selectedColumns: string[] | '*';
   allFieldsSelected: boolean;
   updatedColumns: string[];
+  updateValues?: Record<string, unknown>[];
   insertValues?: Record<string, unknown>[];
   isUpsert?: boolean;
 };
@@ -97,6 +98,7 @@ export const validateOperationIsPermittedOrThrow = ({
   selectedColumns,
   allFieldsSelected,
   updatedColumns,
+  updateValues,
   insertValues,
   isUpsert,
 }: ValidateOperationIsPermittedOrThrowArgs) => {
@@ -105,6 +107,7 @@ export const validateOperationIsPermittedOrThrow = ({
     entityName,
     operationType,
     updatedColumns,
+    updateValues,
     insertValues,
     isUpsert,
   });
@@ -303,12 +306,19 @@ export const validateQueryIsPermittedOrThrow = ({
       : Array.isArray(expressionMap.valuesSet)
         ? expressionMap.valuesSet
         : [expressionMap.valuesSet].filter(isDefined);
+  const policyUpdateValues =
+    operationType !== 'update'
+      ? []
+      : Array.isArray(expressionMap.valuesSet)
+        ? expressionMap.valuesSet
+        : [expressionMap.valuesSet].filter(isDefined);
 
   validateQaVaWorkspaceOperationOrThrow({
     authContext,
     entityName: mainEntity,
     operationType,
     updatedColumns: policyUpdatedColumns,
+    updateValues: policyUpdateValues as Record<string, unknown>[],
     insertValues: policyInsertValues as Record<string, unknown>[],
     isUpsert: operationType === 'insert' && isDefined(expressionMap.onUpdate),
   });
@@ -378,6 +388,7 @@ export const validateQueryIsPermittedOrThrow = ({
     selectedColumns,
     allFieldsSelected,
     updatedColumns,
+    updateValues: policyUpdateValues as Record<string, unknown>[],
     insertValues: policyInsertValues as Record<string, unknown>[],
     isUpsert: operationType === 'insert' && isDefined(expressionMap.onUpdate),
   });

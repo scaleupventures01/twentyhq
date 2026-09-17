@@ -81,6 +81,33 @@ describe('QA VA policy wiring', () => {
       }),
     ).not.toThrow();
 
+    const attributedPersonUpdate = expressionMap('update', 'person');
+
+    attributedPersonUpdate.valuesSet = {
+      qaDisposition: 'booked',
+      updatedBySource: 'MANUAL',
+      updatedByWorkspaceMemberId: qaPolicyEnvironment.QA_VA_WORKSPACE_MEMBER_ID,
+      updatedByName: 'QA VA',
+      updatedByContext: {},
+    };
+    expect(() =>
+      validateQueryIsPermittedOrThrow({
+        ...args,
+        expressionMap: attributedPersonUpdate,
+      }),
+    ).not.toThrow();
+
+    attributedPersonUpdate.valuesSet = {
+      ...attributedPersonUpdate.valuesSet,
+      updatedByWorkspaceMemberId: '55555555-5555-4555-8555-555555555555',
+    };
+    expect(() =>
+      validateQueryIsPermittedOrThrow({
+        ...args,
+        expressionMap: attributedPersonUpdate,
+      }),
+    ).toThrow();
+
     const upsert = expressionMap('insert', 'note');
 
     upsert.valuesSet = [{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }];

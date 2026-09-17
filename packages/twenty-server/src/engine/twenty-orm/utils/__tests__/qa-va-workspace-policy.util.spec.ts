@@ -59,11 +59,44 @@ describe('validateQaVaWorkspaceOperationOrThrow', () => {
       }),
     ).not.toThrow();
 
+    expect(() =>
+      validateQaVaWorkspaceOperationOrThrow({
+        authContext: qaAuthContext,
+        entityName: 'person',
+        operationType: 'update',
+        updatedColumns: [
+          'qaDisposition',
+          'updatedBySource',
+          'updatedByWorkspaceMemberId',
+          'updatedByName',
+          'updatedByContext',
+        ],
+        updateValues: [
+          {
+            qaDisposition: 'booked',
+            updatedBySource: 'MANUAL',
+            updatedByWorkspaceMemberId: MEMBER_ID,
+            updatedByName: 'QA VA',
+            updatedByContext: {},
+          },
+        ],
+      }),
+    ).not.toThrow();
+
     for (const allowedUpdate of [
-      { entityName: 'note', updatedColumns: ['title', 'bodyV2'] },
+      {
+        entityName: 'note',
+        updatedColumns: ['title', 'bodyV2Blocknote', 'bodyV2Markdown'],
+      },
       {
         entityName: 'task',
-        updatedColumns: ['title', 'bodyV2', 'dueAt', 'status'],
+        updatedColumns: [
+          'title',
+          'bodyV2Blocknote',
+          'bodyV2Markdown',
+          'dueAt',
+          'status',
+        ],
       },
     ]) {
       expect(() =>
@@ -92,6 +125,15 @@ describe('validateQaVaWorkspaceOperationOrThrow', () => {
           id: RECORD_ID,
           noteId: PARENT_ID,
           targetPersonId: PERSON_ID,
+          position: 1,
+          createdBySource: 'MANUAL',
+          createdByWorkspaceMemberId: MEMBER_ID,
+          createdByName: 'QA VA',
+          createdByContext: {},
+          updatedBySource: 'MANUAL',
+          updatedByWorkspaceMemberId: MEMBER_ID,
+          updatedByName: 'QA VA',
+          updatedByContext: {},
         },
       },
       {
@@ -108,6 +150,15 @@ describe('validateQaVaWorkspaceOperationOrThrow', () => {
           id: RECORD_ID,
           taskId: PARENT_ID,
           targetPersonId: PERSON_ID,
+          position: 1,
+          createdBySource: 'MANUAL',
+          createdByWorkspaceMemberId: MEMBER_ID,
+          createdByName: 'QA VA',
+          createdByContext: {},
+          updatedBySource: 'MANUAL',
+          updatedByWorkspaceMemberId: MEMBER_ID,
+          updatedByName: 'QA VA',
+          updatedByContext: {},
         },
       },
     ];
@@ -175,6 +226,47 @@ describe('validateQaVaWorkspaceOperationOrThrow', () => {
     ).toThrow();
   });
 
+  it('denies incomplete or forged framework-managed update attribution', () => {
+    for (const updateValues of [
+      [],
+      [
+        {
+          qaDisposition: 'booked',
+          updatedBySource: 'MANUAL',
+          updatedByWorkspaceMemberId: PERSON_ID,
+          updatedByName: 'QA VA',
+          updatedByContext: {},
+        },
+      ],
+    ]) {
+      expect(() =>
+        validateQaVaWorkspaceOperationOrThrow({
+          authContext: qaAuthContext,
+          entityName: 'person',
+          operationType: 'update',
+          updatedColumns: [
+            'qaDisposition',
+            'updatedBySource',
+            'updatedByWorkspaceMemberId',
+            'updatedByName',
+            'updatedByContext',
+          ],
+          updateValues,
+        }),
+      ).toThrow();
+    }
+
+    expect(() =>
+      validateQaVaWorkspaceOperationOrThrow({
+        authContext: qaAuthContext,
+        entityName: 'person',
+        operationType: 'update',
+        updatedColumns: ['qaDisposition', 'updatedBySource'],
+        updateValues: [{ qaDisposition: 'booked', updatedBySource: 'MANUAL' }],
+      }),
+    ).toThrow();
+  });
+
   it('denies upserts, unbound targets, missing idempotency IDs, and task reassignment', () => {
     const deniedInserts = [
       { entityName: 'note', insertValues: [] },
@@ -206,6 +298,36 @@ describe('validateQaVaWorkspaceOperationOrThrow', () => {
         entityName: 'taskTarget',
         insertValues: [
           { id: RECORD_ID, taskId: PARENT_ID, targetOpportunityId: PERSON_ID },
+        ],
+      },
+      {
+        entityName: 'noteTarget',
+        insertValues: [
+          {
+            id: RECORD_ID,
+            noteId: PARENT_ID,
+            targetPersonId: PERSON_ID,
+            position: 1,
+            createdBySource: 'MANUAL',
+            createdByWorkspaceMemberId: PERSON_ID,
+            createdByName: 'QA VA',
+            createdByContext: {},
+            updatedBySource: 'MANUAL',
+            updatedByWorkspaceMemberId: MEMBER_ID,
+            updatedByName: 'QA VA',
+            updatedByContext: {},
+          },
+        ],
+      },
+      {
+        entityName: 'taskTarget',
+        insertValues: [
+          {
+            id: RECORD_ID,
+            taskId: PARENT_ID,
+            targetPersonId: PERSON_ID,
+            position: 'last',
+          },
         ],
       },
     ];
