@@ -1,3 +1,5 @@
+import { Logger } from '@nestjs/common';
+
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import {
   PermissionsException,
@@ -37,6 +39,7 @@ const UUID_PATTERN =
 const QA_DISPOSITION_FIELD = 'qaDisposition';
 const NOTE_UPDATE_FIELDS = new Set(['bodyV2', 'title']);
 const TASK_UPDATE_FIELDS = new Set(['bodyV2', 'dueAt', 'status', 'title']);
+const qaVaPolicyLogger = new Logger('QaVaWorkspacePolicy');
 
 const WRITE_POLICY: Readonly<Record<string, ReadonlySet<QaVaOperationType>>> = {
   note: new Set(['insert', 'update']),
@@ -46,7 +49,20 @@ const WRITE_POLICY: Readonly<Record<string, ReadonlySet<QaVaOperationType>>> = {
   taskTarget: new Set(['insert']),
 };
 
-const deny = (): never => {
+const deny = (
+  reason = 'unspecified',
+  context: Record<string, unknown> = {},
+): never => {
+  if (process.env.QA_VA_POLICY_LOG_DENIALS?.trim() === 'true') {
+    qaVaPolicyLogger.warn(
+      JSON.stringify({
+        event: 'qa_va_policy_denied',
+        reason,
+        ...context,
+      }),
+    );
+  }
+
   throw new PermissionsException(
     PermissionsExceptionMessage.PERMISSION_DENIED,
     PermissionsExceptionCode.PERMISSION_DENIED,
@@ -66,7 +82,7 @@ const readConfig = (): QaVaWorkspacePolicyConfig | null => {
   }
 
   if (!isRequired) {
-    deny();
+    deny('partial_binding_without_required_mode');
   }
 
   const ids = [
@@ -88,7 +104,7 @@ const readConfig = (): QaVaWorkspacePolicyConfig | null => {
     personUpdateFields.size !== 1 ||
     !personUpdateFields.has(QA_DISPOSITION_FIELD)
   ) {
-    deny();
+    deny('invalid_binding_configuration');
   }
 
   return {
@@ -115,7 +131,7 @@ export const isQaVaUserWorkspaceBinding = ({
   }
 
   if (workspaceId !== config.workspaceId) {
-    deny();
+    deny('workspace_binding_mismatch');
   }
 
   return true;
@@ -172,7 +188,7 @@ export const validateQaVaWorkspaceOperationOrThrow = ({
     authContext.workspaceMemberId !== config.workspaceMemberId ||
     authContext.userWorkspaceId !== config.userWorkspaceId
   ) {
-    deny();
+    deny('identity_binding_mismatch');
   }
 
   // The dedicated QA workspace contains synthetic cohort records only. Reads
@@ -183,11 +199,11 @@ export const validateQaVaWorkspaceOperationOrThrow = ({
   }
 
   if (!WRITE_POLICY[entityName]?.has(operationType)) {
-    deny();
+    deny('operation_not_allowlisted', { entityName, operationType });
   }
 
   if (isUpsert) {
-    deny();
+    deny('upsert_not_allowed', { entityName });
   }
 
   if (
@@ -195,7 +211,7 @@ export const validateQaVaWorkspaceOperationOrThrow = ({
     (updatedColumns.length === 0 ||
       updatedColumns.some((column) => !config.personUpdateFields.has(column)))
   ) {
-    deny();
+    deny('person_update_fields_not_allowlisted', { updatedColumns });
   }
 
   const activityUpdateFields =
@@ -211,7 +227,10 @@ export const validateQaVaWorkspaceOperationOrThrow = ({
     (updatedColumns.length === 0 ||
       updatedColumns.some((column) => !activityUpdateFields.has(column)))
   ) {
-    deny();
+    deny('activity_update_fields_not_allowlisted', {
+      entityName,
+      updatedColumns,
+    });
   }
 
   if (operationType !== 'insert') {
@@ -222,7 +241,7 @@ export const validateQaVaWorkspaceOperationOrThrow = ({
     insertValues.length === 0 ||
     insertValues.some((value) => !UUID_PATTERN.test(String(value.id ?? '')))
   ) {
-    deny();
+    deny('insert_requires_client_uuid', { entityName });
   }
 
   if (
@@ -233,7 +252,7 @@ export const validateQaVaWorkspaceOperationOrThrow = ({
         value.assigneeId !== config.workspaceMemberId,
     )
   ) {
-    deny();
+    deny('task_assignee_not_qa_member');
   }
 
   if (entityName === 'noteTarget' || entityName === 'taskTarget') {
@@ -248,7 +267,10 @@ export const validateQaVaWorkspaceOperationOrThrow = ({
           Object.keys(value).some((key) => !allowedKeys.has(key)),
       )
     ) {
-      deny();
+      deny('activity_target_not_person_only', {
+        entityName,
+        payloadKeys: insertValues.map((value) => Object.keys(value).sort()),
+      });
     }
   }
 };
